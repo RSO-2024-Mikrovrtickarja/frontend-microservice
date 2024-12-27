@@ -1,0 +1,223 @@
+{% load static %}
+
+<!doctype html>
+<html lang="en">
+  <head><script src="{% static '/assets/js/color-modes.js' %}"></script>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="generator" content="Hugo 0.122.0">
+    <title>Microscale</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
+    <link href="{% static 'assets/css/bootstrap.min.css' %}" rel="stylesheet">
+
+    <style>
+        .sidenav {
+			height:100%;
+			width:160px;
+			position: fixed;
+			z-index:1;
+			top:0;
+			left:0;
+			background-color:#111;
+			overflow-x: hidden;
+			padding-top:20px;
+		}    
+
+                .sidenav a {
+			padding:6px 8px 6px 16px;
+			text-decoration: none;
+			font-size:25px;
+			color: #818181;
+			display:block;
+		}  
+  
+                .sidenav a:hover{
+			color:#f1f1f1;
+		}     
+
+                .main{
+			margin-left:160px;
+			padding: 0px 10px;
+		}   
+
+      .bd-placeholder-img {
+        font-size: 1.125rem;
+        text-anchor: middle;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        user-select: none;
+      }
+
+      @media (min-width: 768px) {
+        .bd-placeholder-img-lg {
+          font-size: 3.5rem;
+        }
+      }
+
+      .b-example-divider {
+        width: 100%;
+        height: 3rem;
+        background-color: rgba(0, 0, 0, .1);
+        border: solid rgba(0, 0, 0, .15);
+        border-width: 1px 0;
+        box-shadow: inset 0 .5em 1.5em rgba(0, 0, 0, .1), inset 0 .125em .5em rgba(0, 0, 0, .15);
+      }
+
+      .b-example-vr {
+        flex-shrink: 0;
+        width: 1.5rem;
+        height: 100vh;
+      }
+
+      .bi {
+        vertical-align: -.125em;
+        fill: currentColor;
+      }
+
+      .nav-scroller {
+        position: relative;
+        z-index: 2;
+        height: 2.75rem;
+        overflow-y: hidden;
+      }
+
+      .nav-scroller .nav {
+        display: flex;
+        flex-wrap: nowrap;
+        padding-bottom: 1rem;
+        margin-top: -1px;
+        overflow-x: auto;
+        text-align: center;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .btn-bd-primary {
+        --bd-violet-bg: #712cf9;
+        --bd-violet-rgb: 112.520718, 44.062154, 249.437846;
+
+        --bs-btn-font-weight: 600;
+        --bs-btn-color: var(--bs-white);
+        --bs-btn-bg: var(--bd-violet-bg);
+        --bs-btn-border-color: var(--bd-violet-bg);
+        --bs-btn-hover-color: var(--bs-white);
+        --bs-btn-hover-bg: #6528e0;
+        --bs-btn-hover-border-color: #6528e0;
+        --bs-btn-focus-shadow-rgb: var(--bd-violet-rgb);
+        --bs-btn-active-color: var(--bs-btn-hover-color);
+        --bs-btn-active-bg: #5a23c8;
+        --bs-btn-active-border-color: #5a23c8;
+      }
+
+      .bd-mode-toggle {
+        z-index: 1500;
+      }
+
+      .bd-mode-toggle .dropdown-menu .active .bi {
+        display: block !important;
+      }
+    </style>
+
+    
+  </head>
+  <body>
+  
+  <div class="sidenav">
+		<a href="/users/register">Register</a>
+		<a href="/users/login">Login</a>
+		<a href="/gallery">Gallery</a>
+	</div>
+
+<header>
+  <div class="navbar navbar-dark bg-dark shadow-sm">
+    <div class="container">
+      <a href="{% url 'gallery' %}" class="navbar-brand d-flex align-items-center">
+        <strong>Back</strong>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div class="album py-5 bg-light">
+    <div class="container">
+        
+
+      <div class="row">
+
+        <div class="col-lg-10">
+          <img class="img-fluid" src="{{image.url_path}}">
+        </div>
+          
+          <div class="col-lg-2 bg-dark">
+                        <h5 class="card-title">Convert image</h5>
+                <form method="POST" action="{% url 'convert image' slug=image.id %}">
+                    {% csrf_token %}
+                    <!-- Dropdown Input -->
+                    <div class="mb-3">
+                        <label for="imageFormat" class="form-label">Select image format</label>
+                        <select class="form-select" name="imageFormat" id="imageFormat" required>
+                            <option value="BLP">BLP</option>
+                            <option value="BMP">BMP</option>
+                            <option value="BUFR">BUFR</option>
+                            <option value="DDS">DDS</option>
+                            <option value="DIP">DIP</option>
+                            <option value="EPS">EPS</option>
+                            <option value="GIF">GIF</option>
+                            <option value="GRIB">GRIB</option>
+                            <option value="HDF5">HDF5</option>
+                            <option value="ICNS">ICNS</option>
+                            <option value="ICO">ICO</option>
+                            <option value="IM">IM</option>
+                            <option value="JPEG">JPEG</option>
+                            <option value="JPEG2000">JPEG2000</option>
+                            <option value="MPS">MPS</option>
+                            <option value="PCX">PCX</option>
+                            <option value="PNG">PNG</option>
+                            <option value="PPM">PPM</option>
+                            <option value="SGI">SGI</option>
+                            <option value="SPIDER">SPIDER</option>
+                            <option value="TGA">TGA</option>
+                            <option value="TIFF">TIFF</option>
+                            <option value="WEBP">WEBP</option>
+                            <option value="WMF">WMF</option>
+                        </select>
+                    </div>
+                    <!-- Text Input 1 -->
+                    <div class="mb-3">
+                        <label for="width" class="form-label">Width (in pixels)</label>
+                        <input type="number" class="form-control" name="width" id="width" placeholder="Enter new width" required>
+                    </div>
+                    <!-- Text Input 2 -->
+                    <div class="mb-3">
+                        <label for="height" class="form-label">Height (in pixels)</label>
+                        <input type="number" class="form-control" name="height" id="height" placeholder="Enter new height" required>
+                    </div>
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn btn-primary w-100">Convert</button>
+                </form>
+          </div>
+
+      </div>
+
+      <br>
+
+      <div class="row bg-dark">
+          <p>{{image.width}}x{{image.height}} {{image.file_format}} {{image.uploaded_at}}</p>
+      </div>
+
+
+    </div>
+  </div>
+
+</main>
+
+    <script src="{% static 'assets/js/bootstrap.bundle.min.js' %}"></script>
+
+
+  </body>
+</html>
