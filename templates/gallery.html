@@ -155,7 +155,7 @@
           {% for image in images %}
         <div class="col">
           <div class="card shadow-sm">
-              <img src="{{image.url_path}}" style='height: 100%; width: 100%; object-fit: contain'>
+              <img src="data:image;base64,{{ image.data }}" style='height: 100%; width: 100%; object-fit: contain'>
             <div class="card-body">
               <p class="card-text">{{image.file_name}}</p>
                 <p class="card-text">{{image.width}}x{{image.height}} {{image.file_format}}</p>

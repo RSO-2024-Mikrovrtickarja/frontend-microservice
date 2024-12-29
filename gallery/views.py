@@ -1,20 +1,15 @@
-from traceback import print_tb
 
-from django.conf import settings
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 import requests
-from platformdirs import user_runtime_path
 
 import frontend.settings
 from .models import PublicImage, InternalImage, PublicImageProcessingJobRequest
 from frontend.config import config
 import os
 from PIL import Image
-import json
-
-import jwt
-
+from tempfile import SpooledTemporaryFile
+import base64
 
 # Create your views here.
 
@@ -23,6 +18,14 @@ PHOTO_STORAGE_PORT = config.photo_storage_port
 
 def index(request):
     return HttpResponse("Hello, world.")
+
+def download_image_request(image_id: str, user_token: str) -> requests.Response:
+    download_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images/{image_id}/download"
+    download_image_response = requests.get(download_image_url, headers={"Authorization": user_token})
+
+    if download_image_response.status_code != 200:
+        raise Exception(f"Failed to download image {image_id}. Returned status code: {download_image_response.status_code}")
+    return download_image_response
 
 def gallery(request):
     
@@ -40,24 +43,29 @@ def gallery(request):
     all_images_internal = {"images": []}
     for image in get_all_images_response.json()["images"]:
         public_image_obj = PublicImage.model_validate(image)
-        url_path = os.path.join(frontend.settings.MEDIA_URL, public_image_obj.file_name)
-        file_path = os.path.join(frontend.settings.MEDIA_ROOT, public_image_obj.file_name)
 
-        with Image.open(file_path) as img_obj:
-            img_id = str(public_image_obj.id)
+        image_id = str(public_image_obj.id)
+        image_data = base64.b64encode(download_image_request(image_id, user_token).content).decode('ascii')
+        intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
+        intermediate_image_buffer.write(download_image_request(image_id, user_token).content)
+        intermediate_image_buffer.seek(0, os.SEEK_SET)
+
+        with Image.open(intermediate_image_buffer) as img_obj:
+            img_id = image_id
             name = public_image_obj.file_name
             file_format = img_obj.format
             width = img_obj.width
             height = img_obj.height
             uploaded_at = public_image_obj.uploaded_at.strftime("%d.%m.%Y %H:%M")
             internal_image_obj = InternalImage(id=img_id,
-                                               url_path=url_path, 
                                                file_name=name, 
                                                file_format=file_format, 
                                                width=width, 
                                                height=height,
-                                               uploaded_at=uploaded_at)
+                                               uploaded_at=uploaded_at,
+                                               data=image_data)
             all_images_internal["images"].append(internal_image_obj.model_dump())
+            intermediate_image_buffer.close()
         
     context = all_images_internal
     
@@ -76,10 +84,13 @@ def view_image(request, slug):
     image_internal = {"image": []}
     
     public_image_obj = PublicImage.model_validate(image_public["image"])
-    url_path = os.path.join(frontend.settings.MEDIA_URL, public_image_obj.file_name)
-    file_path = os.path.join(frontend.settings.MEDIA_ROOT, public_image_obj.file_name)
+    
+    image_data = base64.b64encode(download_image_request(slug, user_token).content).decode('ascii')
+    intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
+    intermediate_image_buffer.write(download_image_request(slug, user_token).content)
+    intermediate_image_buffer.seek(0, os.SEEK_SET)
 
-    with Image.open(file_path) as img_obj:
+    with Image.open(intermediate_image_buffer) as img_obj:
         img_id = str(public_image_obj.id)
         name = public_image_obj.file_name
         file_format = img_obj.format
@@ -87,12 +98,12 @@ def view_image(request, slug):
         height = img_obj.height
         uploaded_at = public_image_obj.uploaded_at.strftime("%d.%m.%Y %H:%M")
         internal_image_obj = InternalImage(id=img_id,
-                                           url_path=url_path,
                                            file_name=name,
                                            file_format=file_format,
                                            width=width,
                                            height=height,
-                                           uploaded_at=uploaded_at)
+                                           uploaded_at=uploaded_at,
+                                           data=image_data)
 
         image_internal["image"] = internal_image_obj.model_dump()
 
@@ -102,12 +113,7 @@ def view_image(request, slug):
 
 def download_image(request, slug):
     user_token = request.COOKIES.get('jwt')
-    
-    download_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images/{slug}/download"
-    download_image_response = requests.get(download_image_url, headers={"Authorization": user_token})
-
-    if download_image_response.status_code != 200:
-        raise Exception(f"Failed to download image {slug}. Returned status code: {download_image_response.status_code}")
+    download_image_response = download_image_request(slug, user_token)
     
     response = HttpResponse(download_image_response.content, content_type=download_image_response.headers["content-type"])
     response['Content-Disposition'] = 'inline; filename=' + os.path.basename(download_image_response.headers["Content-Disposition"])

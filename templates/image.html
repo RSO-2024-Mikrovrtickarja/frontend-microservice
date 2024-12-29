@@ -150,7 +150,7 @@
       <div class="row">
 
         <div class="col-lg-10">
-          <img class="img-fluid" src="{{image.url_path}}">
+            <img class="img-fluid" src="data:image;base64,{{ image.data }}">
         </div>
           
           <div class="col-lg-2 bg-dark">
@@ -207,7 +207,7 @@
       <br>
 
       <div class="row bg-dark">
-          <p>{{image.width}}x{{image.height}} {{image.file_format}} {{image.uploaded_at}}</p>
+          <p>{{image.file_name}} {{image.width}}x{{image.height}} {{image.file_format}} {{image.uploaded_at}}</p>
       </div>
 
 

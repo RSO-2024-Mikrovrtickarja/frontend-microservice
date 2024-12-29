@@ -4,7 +4,6 @@ from .forms import RegistrationForm, LoginForm
 import requests
 from .models import UserRegister, UserLogin, Token
 from frontend.config import config
-import frontend.settings
 
 # Create your views here.
 

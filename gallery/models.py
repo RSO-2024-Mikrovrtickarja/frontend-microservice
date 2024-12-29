@@ -16,12 +16,12 @@ class PublicImage(BaseModel):
 
 class InternalImage(BaseModel):
     id: str
-    url_path: str
     file_name: str
     file_format: str
     width: int
     height: int
     uploaded_at: str
+    data: str
 
  
 class PublicImageProcessingJobRequest(BaseModel):
