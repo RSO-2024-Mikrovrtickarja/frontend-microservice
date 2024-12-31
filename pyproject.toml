@@ -16,6 +16,7 @@ django-resized = "^1.0.3"
 pillow = "^11.0.0"
 uuid = "^1.30"
 pyjwt = "^2.10.1"
+requests = "^2.32.3"
 
 
 [build-system]
