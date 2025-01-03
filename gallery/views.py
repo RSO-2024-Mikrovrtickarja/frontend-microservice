@@ -1,10 +1,11 @@
+from traceback import print_tb
 
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 import requests
 
 import frontend.settings
-from .models import PublicImage, InternalImage, PublicImageProcessingJobRequest
+from .models import PublicImage, InternalImage, PublicImageProcessingJobRequest, ImageShareUrlInfo
 from frontend.config import config
 import os
 from PIL import Image
@@ -108,7 +109,7 @@ def view_image(request, slug):
         image_internal["image"] = internal_image_obj.model_dump()
 
     context = image_internal
-
+    
     return render(request, "image.html", context)
 
 def download_image(request, slug):
@@ -122,10 +123,18 @@ def download_image(request, slug):
 
 def share_image(request, slug):
     user_token = request.COOKIES.get('jwt')
+
+    share_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images/{slug}/share-url"
+    share_image_response = requests.post(share_image_url, headers={"Authorization": user_token})
+
+    if share_image_response.status_code != 200:
+        raise Exception(
+            f"Failed to generate image share url {slug}. Returned status code: {share_image_response.status_code}")
     
-    # TODO
+    generated_url = ImageShareUrlInfo.model_validate(share_image_response.json())
+    context = generated_url.model_dump()
     
-    return redirect("/gallery")
+    return render(request, "share.html", context)
 
 def delete_image(request, slug):
     user_token = request.COOKIES.get('jwt')

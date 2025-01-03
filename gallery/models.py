@@ -30,3 +30,7 @@ class PublicImageProcessingJobRequest(BaseModel):
     resize_image_to_width: int
     resize_image_to_height: int
     change_to_format: str
+
+class ImageShareUrlInfo(BaseModel):
+    full_url: str
+
