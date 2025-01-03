@@ -19,8 +19,11 @@ from django.urls import path, include
 from django.conf.urls.static import static
 from django.conf import settings
 
+from .views import health
+
 urlpatterns = [
     path("users/", include("users.urls")),
     path("gallery/", include("gallery.urls")),
     path('admin/', admin.site.urls),
+    path('health', health)
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
