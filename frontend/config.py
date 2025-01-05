@@ -8,6 +8,8 @@ class Config(BaseSettings):
     
     photo_storage_host: str
     photo_storage_port: int
+    
+    upscale_api_key: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

@@ -149,11 +149,12 @@
 
       <div class="row">
 
-        <div class="col-lg-10">
+        <div class="col-lg-9">
             <img class="img-fluid" src="data:image;base64,{{ image.data }}">
         </div>
           
-          <div class="col-lg-2 bg-dark">
+          <div class="col-lg-3 bg-dark">
+              <br>
                         <h5 class="card-title">Convert image</h5>
                 <form method="POST" action="{% url 'convert image' slug=image.id %}">
                     {% csrf_token %}
@@ -200,7 +201,22 @@
                     <!-- Submit Button -->
                     <button type="submit" class="btn btn-primary w-100">Convert</button>
                 </form>
-          </div>
+              <br>
+              <br>
+              <h5 class="card-title">Upscale image with AI</h5>
+              <form method="POST" action="{% url 'upscale image' slug=image.id %}">
+                  {% csrf_token %}
+                  <div class="mb-3">
+                      <label for="upscaleFactor" class="form-label">Select image upscale factor</label>
+                      <select class="form-select" name="upscaleFactor" id="upscaleFactor" required>
+                          <option value="2">2</option>
+                          <option value="4">4</option>
+                          <option value="6">6</option>
+                          <option value="8">8</option>
+                      </select>
+                  <button type="submit" class="btn btn-primary w-100">Upscale</button>
+                  </div>
+              </form>
 
       </div>
 

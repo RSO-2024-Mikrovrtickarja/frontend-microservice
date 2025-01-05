@@ -1,5 +1,3 @@
-from traceback import print_tb
-
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 import requests
@@ -9,8 +7,9 @@ from .models import PublicImage, InternalImage, PublicImageProcessingJobRequest,
 from frontend.config import config
 import os
 from PIL import Image
-from tempfile import SpooledTemporaryFile
+from tempfile import SpooledTemporaryFile, NamedTemporaryFile
 import base64
+import io
 
 # Create your views here.
 
@@ -158,7 +157,7 @@ def upload_image(request):
 
         if upload_image_response.status_code != 200:
             raise Exception(
-                f"Failed to download image. Returned status code: {upload_image_response.status_code}")
+                f"Failed to upload image. Returned status code: {upload_image_response.status_code}")
         
         return redirect("/gallery")
     
@@ -172,15 +171,72 @@ def convert_image(request, slug):
                                                   resize_image_to_height=request.POST["height"], 
                                                   change_to_format=request.POST["imageFormat"])
     
-    print(job_request.model_dump())
-
     convert_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images/{slug}/jobs"
     convert_image_response = requests.post(convert_image_url, 
                                            json=job_request.model_dump(), 
                                            headers={"Authorization": user_token})
 
     if convert_image_response.status_code != 200:
-        raise Exception(
-            f"Failed to submit job. Returned status code: {convert_image_response.status_code}")
+        raise Exception(f"Failed to submit job. Returned status code: {convert_image_response.status_code}")
     
     return redirect(f"/gallery/image/view/{slug}")
+
+def upscale_image(request, slug):
+    # Only JPG, PNG, TIFF and WEBP input image formats are supported!
+    user_token = request.COOKIES.get('jwt')
+    image_data_response = download_image_request(slug, user_token)
+
+    intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
+    intermediate_image_buffer.write(image_data_response.content)
+    intermediate_image_buffer.seek(0, os.SEEK_SET)
+
+    upscale_url = "https://api.picsart.io/tools/1.0/upscale"
+    upscale_factor = request.POST["upscaleFactor"]
+    api_key = config.upscale_api_key
+    output_image_format = "JPG"
+
+    data = {
+        "upscale_factor": upscale_factor,  # Text field
+        "format": output_image_format,  # Text field
+    }
+
+    files = {
+        "image": intermediate_image_buffer
+    }
+
+    # Headers
+    headers = {
+        "accept": "application/json",
+        "X-Picsart-API-Key": api_key,
+    }
+
+    # Send the POST request
+    upscale_response = requests.post(upscale_url, headers=headers, data=data, files=files)
+    print(upscale_response.json()["data"]["url"])
+
+    if upscale_response.status_code != 200:
+        raise Exception(f"Failed to upscale image. Returned status code: {upscale_response.status_code}. "
+                        f"Err: {upscale_response.text}")
+
+    filename = (
+        image_data_response.headers.get("Content-Disposition", "")
+        .split("filename=")[1]
+        .strip('"')
+    )
+    filename = "upscaled_" + filename
+
+    upscaled_image = Image.open(requests.get(upscale_response.json()["data"]["url"], stream=True).raw)
+    upscaled_img_byte_arr = io.BytesIO()
+    upscaled_image.save(upscaled_img_byte_arr, format='JPEG')
+    upscaled_img_byte_arr = upscaled_img_byte_arr.getvalue()
+
+    image = {"uploaded_file": (filename, upscaled_img_byte_arr)}
+
+    upload_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images"
+    upload_image_response = requests.post(upload_image_url, files=image, headers={"Authorization": user_token})
+
+    if upload_image_response.status_code != 200:
+        raise Exception(
+            f"Failed to upload image. Returned status code: {upload_image_response.status_code}")
+
+    return redirect(f"/gallery")
