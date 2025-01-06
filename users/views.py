@@ -30,7 +30,7 @@ def registration(request):
                 raise Exception(
                     f"Failed to register new user. Returned status code: {user_registration_response.status_code}")
 
-            return redirect("/login")
+            return redirect("/users/login")
     else:
         form = RegistrationForm()
 

@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 import requests
+import pybreaker
 
 import frontend.settings
 from .models import PublicImage, InternalImage, PublicImageProcessingJobRequest, ImageShareUrlInfo
@@ -10,11 +11,15 @@ from PIL import Image
 from tempfile import SpooledTemporaryFile, NamedTemporaryFile
 import base64
 import io
+from retry import retry
 
 # Create your views here.
 
 PHOTO_STORAGE_HOST = config.photo_storage_host
 PHOTO_STORAGE_PORT = config.photo_storage_port
+
+upscale_api_breaker = pybreaker.CircuitBreaker(fail_max=2, reset_timeout=60)
+photo_storage_breaker = pybreaker.CircuitBreaker(fail_max=3, reset_timeout=30)
 
 def index(request):
     return HttpResponse("Hello, world.")
@@ -27,86 +32,95 @@ def download_image_request(image_id: str, user_token: str) -> requests.Response:
         raise Exception(f"Failed to download image {image_id}. Returned status code: {download_image_response.status_code}")
     return download_image_response
 
-def gallery(request):
+def gallery(request, error_msg: str = ""):
     
     user_token = request.COOKIES.get('jwt')
     
     if not user_token:
          return redirect("/users/login")
 
-    get_all_images_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images"
-    get_all_images_response = requests.get(get_all_images_url, headers={"Authorization": user_token})
-
-    if get_all_images_response.status_code != 200:
-        raise Exception(f"Failed to get all images. Returned status code: {get_all_images_response.status_code}")
-
     all_images_internal = {"images": []}
-    for image in get_all_images_response.json()["images"]:
-        public_image_obj = PublicImage.model_validate(image)
+    get_all_images_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images"
+    
+    with photo_storage_breaker.calling():
+        try:
+            get_all_images_response = requests.get(get_all_images_url, headers={"Authorization": user_token})
 
-        image_id = str(public_image_obj.id)
-        image_data = base64.b64encode(download_image_request(image_id, user_token).content).decode('ascii')
-        intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
-        intermediate_image_buffer.write(download_image_request(image_id, user_token).content)
-        intermediate_image_buffer.seek(0, os.SEEK_SET)
-
-        with Image.open(intermediate_image_buffer) as img_obj:
-            img_id = image_id
-            name = public_image_obj.file_name
-            file_format = img_obj.format
-            width = img_obj.width
-            height = img_obj.height
-            uploaded_at = public_image_obj.uploaded_at.strftime("%d.%m.%Y %H:%M")
-            internal_image_obj = InternalImage(id=img_id,
-                                               file_name=name, 
-                                               file_format=file_format, 
-                                               width=width, 
-                                               height=height,
-                                               uploaded_at=uploaded_at,
-                                               data=image_data)
-            all_images_internal["images"].append(internal_image_obj.model_dump())
-            intermediate_image_buffer.close()
+            if get_all_images_response.status_code != 200:
+                raise Exception(f"Failed to get all images. Returned status code: {get_all_images_response.status_code}")
+        
+            for image in get_all_images_response.json()["images"]:
+                public_image_obj = PublicImage.model_validate(image)
+        
+                image_id = str(public_image_obj.id)
+                image_data = base64.b64encode(download_image_request(image_id, user_token).content).decode('ascii')
+                intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
+                intermediate_image_buffer.write(download_image_request(image_id, user_token).content)
+                intermediate_image_buffer.seek(0, os.SEEK_SET)
+        
+                with Image.open(intermediate_image_buffer) as img_obj:
+                    img_id = image_id
+                    name = public_image_obj.file_name
+                    file_format = img_obj.format
+                    width = img_obj.width
+                    height = img_obj.height
+                    uploaded_at = public_image_obj.uploaded_at.strftime("%d.%m.%Y %H:%M")
+                    internal_image_obj = InternalImage(id=img_id,
+                                                       file_name=name, 
+                                                       file_format=file_format, 
+                                                       width=width, 
+                                                       height=height,
+                                                       uploaded_at=uploaded_at,
+                                                       data=image_data)
+                    all_images_internal["images"].append(internal_image_obj.model_dump())
+                    intermediate_image_buffer.close()
+        except pybreaker.CircuitBreakerError:
+            error_msg = "Failed to retrieve images. Try again later."
         
     context = all_images_internal
+    context["error_msg"] = error_msg
     
     return render(request, "gallery.html", context)
 
 def view_image(request, slug):
     user_token = request.COOKIES.get('jwt')
-
-    get_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images/{slug}"
-    get_image_response = requests.get(get_image_url, headers={"Authorization": user_token})
-
-    if get_image_response.status_code != 200:
-        raise Exception(f"Failed to get image {slug}. Returned status code: {get_image_response.status_code}")
-    
-    image_public = get_image_response.json()
     image_internal = {"image": []}
+    get_image_url = f"http://{PHOTO_STORAGE_HOST}:{PHOTO_STORAGE_PORT}/images/{slug}"
     
-    public_image_obj = PublicImage.model_validate(image_public["image"])
-    
-    image_data = base64.b64encode(download_image_request(slug, user_token).content).decode('ascii')
-    intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
-    intermediate_image_buffer.write(download_image_request(slug, user_token).content)
-    intermediate_image_buffer.seek(0, os.SEEK_SET)
-
-    with Image.open(intermediate_image_buffer) as img_obj:
-        img_id = str(public_image_obj.id)
-        name = public_image_obj.file_name
-        file_format = img_obj.format
-        width = img_obj.width
-        height = img_obj.height
-        uploaded_at = public_image_obj.uploaded_at.strftime("%d.%m.%Y %H:%M")
-        internal_image_obj = InternalImage(id=img_id,
-                                           file_name=name,
-                                           file_format=file_format,
-                                           width=width,
-                                           height=height,
-                                           uploaded_at=uploaded_at,
-                                           data=image_data)
-
-        image_internal["image"] = internal_image_obj.model_dump()
-
+    with photo_storage_breaker.calling():
+        try:
+            get_image_response = requests.get(get_image_url, headers={"Authorization": user_token})
+        
+            if get_image_response.status_code != 200:
+                raise Exception(f"Failed to get image {slug}. Returned status code: {get_image_response.status_code}")
+            
+            image_public = get_image_response.json()
+            
+            public_image_obj = PublicImage.model_validate(image_public["image"])
+            
+            image_data = base64.b64encode(download_image_request(slug, user_token).content).decode('ascii')
+            intermediate_image_buffer = SpooledTemporaryFile(mode="w+b")
+            intermediate_image_buffer.write(download_image_request(slug, user_token).content)
+            intermediate_image_buffer.seek(0, os.SEEK_SET)
+        
+            with Image.open(intermediate_image_buffer) as img_obj:
+                img_id = str(public_image_obj.id)
+                name = public_image_obj.file_name
+                file_format = img_obj.format
+                width = img_obj.width
+                height = img_obj.height
+                uploaded_at = public_image_obj.uploaded_at.strftime("%d.%m.%Y %H:%M")
+                internal_image_obj = InternalImage(id=img_id,
+                                                   file_name=name,
+                                                   file_format=file_format,
+                                                   width=width,
+                                                   height=height,
+                                                   uploaded_at=uploaded_at,
+                                                   data=image_data)
+        
+                image_internal["image"] = internal_image_obj.model_dump()
+        except pybreaker.CircuitBreakerError:
+            return gallery(request, error_msg="Failed to view image. Try again later.")
     context = image_internal
     
     return render(request, "image.html", context)
@@ -159,9 +173,7 @@ def upload_image(request):
             raise Exception(
                 f"Failed to upload image. Returned status code: {upload_image_response.status_code}")
         
-        return redirect("/gallery")
-    
-    return HttpResponse("Error when uploading image.")
+    return redirect("/gallery")
 
 def convert_image(request, slug):
     user_token = request.COOKIES.get('jwt')
@@ -180,6 +192,17 @@ def convert_image(request, slug):
         raise Exception(f"Failed to submit job. Returned status code: {convert_image_response.status_code}")
     
     return redirect(f"/gallery/image/view/{slug}")
+
+@retry(exceptions=Exception, tries=2, delay=2)
+@upscale_api_breaker
+def call_external_upscale_api(url, headers, data, files):
+    response = requests.post(url, headers=headers, data=data, files=files)
+    print(response.json()["data"]["url"])
+    
+    if response.status_code != 200:
+        raise Exception(f"Failed to upscale image. Returned status code: {response.status_code}. "
+                        f"Err: {response.text}")
+    return response
 
 def upscale_image(request, slug):
     # Only JPG, PNG, TIFF and WEBP input image formats are supported!
@@ -204,19 +227,17 @@ def upscale_image(request, slug):
         "image": intermediate_image_buffer
     }
 
-    # Headers
     headers = {
         "accept": "application/json",
         "X-Picsart-API-Key": api_key,
     }
+    
+    upscale_response = None
+    try:
+        upscale_response = call_external_upscale_api(upscale_url, headers, data, files)
+    except pybreaker.CircuitBreakerError:
+        return gallery(request, error_msg="Upscaling functionality currently not available. Try again later.")
 
-    # Send the POST request
-    upscale_response = requests.post(upscale_url, headers=headers, data=data, files=files)
-    print(upscale_response.json()["data"]["url"])
-
-    if upscale_response.status_code != 200:
-        raise Exception(f"Failed to upscale image. Returned status code: {upscale_response.status_code}. "
-                        f"Err: {upscale_response.text}")
 
     filename = (
         image_data_response.headers.get("Content-Disposition", "")
