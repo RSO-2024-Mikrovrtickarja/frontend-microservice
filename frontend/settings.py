@@ -28,6 +28,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://rso-ui.simongoricar.com",
+    "http://localhost:8000"
+]
+
 
 # Application definition
 
