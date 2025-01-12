@@ -5,7 +5,8 @@ on:
     push:
         branches: 
             - "main"
-
+            - "dev"
+            
 jobs:
     build-and-push:
         name: Build and push
